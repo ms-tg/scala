@@ -5,6 +5,9 @@ import org.junit.runners.JUnit4
 import org.junit.Test
 import org.junit.Assert._
 
+import scala.ref.WeakReference
+import scala.util.Try
+
 @RunWith(classOf[JUnit4])
 class StreamTest {
 
@@ -15,4 +18,48 @@ class StreamTest {
     assertTrue(Stream(1,2,3,4,5).filter(_ < 4) == Seq(1,2,3))
     assertTrue(Stream(1,2,3,4,5).filterNot(_ > 4) == Seq(1,2,3,4))
   }
+
+  /** Test helper to verify that the given Stream operation allows
+    * GC of the head during processing of the tail.
+    */
+  def assertStreamOpAllowsGC[B](op: (=> Stream[Int], Int => B) => Any, f: Int => B): Unit = {
+    val msgSuccessGC = "GC success"
+    val msgFailureGC = "GC failure"
+
+    val ref = WeakReference( Stream.from(1).take(500) ) // wait about 5 seconds to fail
+
+    def gcAndThrowIfCollected(n: Int): B = {
+      System.gc()
+      Thread.sleep(10)
+      if (ref.get.isEmpty) throw new RuntimeException(msgSuccessGC)
+      assertTrue(n >= 1) // protect from JIT optimizations
+      f(n)
+    }
+
+    val res = Try { op(ref(), gcAndThrowIfCollected) }
+    val msg = res.failed.map(_.getMessage).getOrElse(msgFailureGC)
+
+    assertTrue(msg == msgSuccessGC)
+  }
+
+  @Test
+  def foreach_allows_GC() {
+    assertStreamOpAllowsGC[Unit](_.foreach(_), _ => ())
+  }
+
+  @Test
+  def filter_all_foreach_allows_GC() {
+    assertStreamOpAllowsGC[Unit](_.filter(_ => true).foreach(_), _ => ())
+  }
+
+  @Test // SI-8990
+  def withFilter_after_first_foreach_allows_GC: Unit = {
+    assertStreamOpAllowsGC[Unit](_.withFilter(_ > 1).foreach(_), _ => ())
+  }
+
+  @Test // SI-8990
+  def withFilter_afer_first_withFilter_foreach_allows_GC: Unit = {
+    assertStreamOpAllowsGC[Unit](_.withFilter(_ > 1).withFilter(_ < 100).foreach(_), _ => ())
+  }
+
 }
