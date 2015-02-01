@@ -525,7 +525,7 @@ self =>
   override def filter(p: A => Boolean): Stream[A] = filterImpl(p, isFlipped = false) // This override is only left in 2.11 because of binary compatibility, see PR #3925
 
   /** A FilterMonadic which allows GC of the head of stream during processing */
-  override final def withFilter(p: A => Boolean): FilterMonadic[A, Stream[A]] = new StreamWithFilter2(this, p)
+  override final def withFilter(p: A => Boolean): FilterMonadic[A, Stream[A]] = new StreamWithFilter(this, p)
 
   /** A lazier Iterator than LinearSeqLike's. */
   override def iterator: Iterator[A] = new StreamIterator(self)
@@ -1043,24 +1043,20 @@ self =>
 
 }
 
-/** An implementation of FilterMonadic which allows GC of the stream as it is processed */
-final class StreamWithFilter2[A](s: => Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
+/** An implementation of `FilterMonadic` allowing GC of the `Stream` as it is processed.
+  *
+  * Because this is not an inner class of `Stream`, it is now possible to offer explicit
+  * 'null after first use' semantics for the reference to the head of the original
+  * `Stream`, allowing GC to collect while the tail is still processing (see SI-8990).
+  */
+final class StreamWithFilter[A](s: => Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
   var nullAfterAccess: Stream[A] = s
+  private[this] def accessOnce(): Stream[A] = { val once = nullAfterAccess; nullAfterAccess = null; once }
 
-  def accessOnce(): Stream[A] = {
-    val once = nullAfterAccess
-    nullAfterAccess = null
-    once
-  }
-
-  def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That =
-    accessOnce().filter(p).map(f)
-  def flatMap[B, That](f: A => scala.collection.GenTraversableOnce[B])(implicit bf: CanBuildFrom[Stream[A], B, That]): That =
-    accessOnce().filter(p).flatMap(f)
-  def foreach[U](f: A => U): Unit =
-    accessOnce().filter(p).foreach(f)
-  def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] =
-    new StreamWithFilter2[A](accessOnce(), x => p(x) && q(x))
+  def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That                                          = accessOnce().filter(p).map(f)
+  def flatMap[B, That](f: A => scala.collection.GenTraversableOnce[B])(implicit bf: CanBuildFrom[Stream[A], B, That]): That = accessOnce().filter(p).flatMap(f)
+  def foreach[U](f: A => U): Unit                                                                                           = accessOnce().filter(p).foreach(f)
+  def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]]                                                              = new StreamWithFilter[A](accessOnce(), x => p(x) && q(x))
 }
 
 /** A specialized, extra-lazy implementation of a stream iterator, so it can
