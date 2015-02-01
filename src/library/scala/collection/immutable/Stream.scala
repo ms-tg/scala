@@ -1050,8 +1050,8 @@ self =>
   * `Stream`, allowing GC to collect while the tail is still processing (see SI-8990).
   */
 final class StreamWithFilter[A](s: => Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
-  var nullAfterAccess: Stream[A] = s
-  private[this] def accessOnce(): Stream[A] = { val once = nullAfterAccess; nullAfterAccess = null; once }
+  private var nullAfterAccess: Stream[A] = s
+  private def accessOnce(): Stream[A] = { val once = nullAfterAccess; nullAfterAccess = null; once }
 
   def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That                                          = accessOnce().filter(p).map(f)
   def flatMap[B, That](f: A => scala.collection.GenTraversableOnce[B])(implicit bf: CanBuildFrom[Stream[A], B, That]): That = accessOnce().filter(p).flatMap(f)
