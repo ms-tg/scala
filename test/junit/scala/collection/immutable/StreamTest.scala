@@ -27,14 +27,14 @@ class StreamTest {
 
   @Test
   def foreach_allows_GC() {
-    val ref = WeakReference( Stream.continually(42).take(100) )
+    val ref = WeakReference( Stream.continually(42).take(300) )
     Try { ref().foreach(gcAndThrowIfCollected(ref)) }
     assert( ref.get.isEmpty )
   }
 
   @Test // SI-8990
   def withFilter_foreach_allowsGC {
-    val ref = WeakReference( Stream.continually(42).take(100) )
+    val ref = WeakReference( Stream.continually(42).take(300) )
     Try { ref().withFilter(_ => true).foreach(gcAndThrowIfCollected(ref)) }
     assert( ref.get.isEmpty )
   }
