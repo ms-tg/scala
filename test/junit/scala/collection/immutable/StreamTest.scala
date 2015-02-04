@@ -24,7 +24,7 @@ class StreamTest {
     val msgSuccessGC = "GC success"
     val msgFailureGC = "GC failure"
 
-    val ref = WeakReference( Stream.continually(a).take(500) )
+    val ref = WeakReference( Stream.continually(a) )
     
     def gcAndThrowIfCollected(dummy: A): B = {
       System.gc()
