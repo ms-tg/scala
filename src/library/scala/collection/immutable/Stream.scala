@@ -1252,13 +1252,15 @@ object Stream extends SeqFactory[Stream] {
     * `Stream`, allowing GC to collect while the tail is still processing (see SI-8990).
     */
   private[immutable] final class StreamWithFilter[A](var s: Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
-    @volatile private def nullAfterUse(): Stream[A] = { val once = s; s = null; once }
+    private def nullAfterUse(): Stream[A] = { val once = s; s = null; once }
 
-    def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That                                          = nullAfterUse().filter(p).map(f)
-    def flatMap[B, That](f: A => scala.collection.GenTraversableOnce[B])(implicit bf: CanBuildFrom[Stream[A], B, That]): That = nullAfterUse().filter(p).flatMap(f)
-    def foreach[U](f: A => U): Unit                                                                                           = nullAfterUse().filter(p).foreach(f)
-    def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]]                                                              = new StreamWithFilter[A](nullAfterUse(), x => p(x) && q(x))
+    def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That =
+      nullAfterUse().filter(p).map(f)
+    def flatMap[B, That](f: A => scala.collection.GenTraversableOnce[B])(implicit bf: CanBuildFrom[Stream[A], B, That]): That =
+      nullAfterUse().filter(p).flatMap(f)
+    def foreach[U](f: A => U): Unit =
+      nullAfterUse().filter(p).foreach(f)
+    def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] =
+      new StreamWithFilter[A](nullAfterUse(), x => p(x) && q(x))
   }
 }
-
-
