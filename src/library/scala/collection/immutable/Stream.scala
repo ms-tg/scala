@@ -1253,7 +1253,8 @@ object Stream extends SeqFactory[Stream] {
     * head, it is now possible for GC to collect any leading and filtered-out elements
     * which do not satisfy the filter, while the tail is still processing (see SI-8990).
     */
-  private[immutable] final class StreamWithFilter[A](private var s: Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
+  private[immutable] final class StreamWithFilter[A](sl: => Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
+    private var s = sl                                              // set to null to allow GC after filtered
     private lazy val filtered = { val f = s filter p; s = null; f } // don't set to null if throw during filter
 
     def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That =
@@ -1265,12 +1266,8 @@ object Stream extends SeqFactory[Stream] {
     def foreach[U](f: A => U): Unit =
       filtered foreach f
 
-    @noinline // Workaround SI-9137, see https://github.com/scala/scala/pull/4284#issuecomment-73180791
-    def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] = {
-      val h = s                                                    // in case s is set to null concurrently
-      if (h != null) new StreamWithFilter[A](h, x => p(x) && q(x)) // preserve laziness if not yet filtered
-      else new StreamWithFilter[A](filtered, q)
-    }
+    def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] = 
+      new StreamWithFilter[A](filtered, q)
   }
 
 }
