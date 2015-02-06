@@ -58,8 +58,18 @@ class StreamTest {
   }
 
   @Test // SI-8990
-  def withFilter_afer_first_withFilter_foreach_allows_GC: Unit = {
+  def withFilter_after_first_withFilter_foreach_allows_GC: Unit = {
     assertStreamOpAllowsGC[Unit](_.withFilter(_ > 1).withFilter(_ < 100).foreach(_), _ => ())
+  }
+
+  @Test // SI-8990
+  def withFilter_can_retry_after_exception_thrown_in_filter: Unit = {
+    var shouldThrow = true
+    def greaterThanFiveButMayThrow(n: Int) = if (shouldThrow && n == 5) throw new RuntimeException("n == 5") else n > 5
+    val wf = Stream.from(1).take(10).withFilter(greaterThanFiveButMayThrow)
+    Try { wf.map(identity) }                   // throws on n == 5
+    shouldThrow = false
+    assertTrue( wf.map(identity).length == 5 ) // success instead of NPE
   }
 
 }

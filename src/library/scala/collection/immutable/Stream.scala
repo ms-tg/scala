@@ -525,6 +525,7 @@ self =>
   override def filter(p: A => Boolean): Stream[A] = filterImpl(p, isFlipped = false) // This override is only left in 2.11 because of binary compatibility, see PR #3925
 
   /** A FilterMonadic which allows GC of the head of stream during processing */
+  @noinline // Workaround SI-9137, see https://github.com/scala/scala/pull/4284#issuecomment-73180791
   override final def withFilter(p: A => Boolean): FilterMonadic[A, Stream[A]] = new Stream.StreamWithFilter(this, p)
 
   /** A lazier Iterator than LinearSeqLike's. */
@@ -1253,7 +1254,7 @@ object Stream extends SeqFactory[Stream] {
     * which do not satisfy the filter, while the tail is still processing (see SI-8990).
     */
   private[immutable] final class StreamWithFilter[A](private var s: Stream[A], p: A => Boolean) extends FilterMonadic[A, Stream[A]] {
-    private lazy val filtered = try { s filter p } finally { s = null }
+    private lazy val filtered = { val f = s filter p; s = null; f } // don't set to null if throw during filter
 
     def map[B, That](f: A => B)(implicit bf: CanBuildFrom[Stream[A], B, That]): That =
       filtered map f
@@ -1264,9 +1265,11 @@ object Stream extends SeqFactory[Stream] {
     def foreach[U](f: A => U): Unit =
       filtered foreach f
 
+    @noinline // Workaround SI-9137, see https://github.com/scala/scala/pull/4284#issuecomment-73180791
     def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] = {
-      val head = if (s != null) s else filtered        // preserve laziness if not yet filtered
-      new StreamWithFilter[A](head, x => p(x) && q(x))
+      val h = s                                                    // in case s is set to null concurrently
+      if (h != null) new StreamWithFilter[A](h, x => p(x) && q(x)) // preserve laziness if not yet filtered
+      else new StreamWithFilter[A](filtered, q)
     }
   }
 
