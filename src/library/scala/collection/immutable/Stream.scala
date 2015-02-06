@@ -1266,7 +1266,7 @@ object Stream extends SeqFactory[Stream] {
     def foreach[U](f: A => U): Unit =
       filtered foreach f
 
-    def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] = 
+    def withFilter(q: A => Boolean): FilterMonadic[A, Stream[A]] =
       new StreamWithFilter[A](filtered, q)
   }
 
